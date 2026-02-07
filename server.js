@@ -17,14 +17,14 @@ app.use(express.json());
 
 // ===== ENV =====
 const MQTT_HOST  = process.env.MQTT_HOST  || "mqtt://mqtt-broker:1883";
-const MQTT_USER  = process.env.MQTT_USER  || "Weatherreportingsystem";
-const MQTT_PASS  = process.env.MQTT_PASS  || "Weatherreportingsystem@@";
+const MQTT_USER  = process.env.MQTT_USER  || "-------------------";
+const MQTT_PASS  = process.env.MQTT_PASS  || "-------------------------";
 
 const MQTT_TOPIC = process.env.MQTT_TOPIC || "iot/+/data";
 
 const PGHOST     = process.env.PGHOST     || "postgres";
-const PGUSER     = process.env.PGUSER     || "Weatherreportingsystem";
-const PGPASSWORD = process.env.PGPASSWORD || "Weatherreportingsystem@@";
+const PGUSER     = process.env.PGUSER     || "------------------------";
+const PGPASSWORD = process.env.PGPASSWORD || "---------------------------------";
 const PGDATABASE = process.env.PGDATABASE || "iot_db";
 const PGPORT     = Number(process.env.PGPORT || 5432);
 

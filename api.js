@@ -7,8 +7,8 @@ const app = express();
 app.use(express.json());
 // ===== ENV =====
 const PGHOST     = process.env.PGHOST     || "postgres";
-const PGUSER     = process.env.PGUSER     || "Weatherreportingsystem";
-const PGPASSWORD = process.env.PGPASSWORD || "Weatherreportingsystem@@";
+const PGUSER     = process.env.PGUSER     || "-------------------------";
+const PGPASSWORD = process.env.PGPASSWORD || "-------------------------------";
 const PGDATABASE = process.env.PGDATABASE || "iot_db";
 const PGPORT     = Number(process.env.PGPORT || 5432);
 
