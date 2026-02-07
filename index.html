@@ -1,0 +1,453 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Weather Monitoring Dashboard</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root { --bg:#0b1220; --card:#111a2e; --text:#e8eefc; --muted:#9fb0d0; --line:#243255; }
+    body { margin:0; font-family: system-ui, Arial; background: linear-gradient(180deg,#070c16,#0b1220); color: var(--text); }
+    .wrap { max-width: 1400px; margin: 0 auto; padding: 22px; }
+
+    .top { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    .title { font-size: 20px; font-weight: 800; }
+
+    /* stack sections vertically */
+    .grid { display:grid; grid-template-columns: 1fr; gap: 16px; margin-top: 16px; }
+
+    .card {
+      background: rgba(17,26,46,.92);
+      border: 1px solid rgba(36,50,85,.7);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+    }
+
+    .row { display:flex; align-items:center; justify-content:space-between; gap: 10px; flex-wrap:wrap; }
+    .pill { padding: 6px 10px; border-radius: 999px; border:1px solid rgba(36,50,85,.9); color: var(--muted); font-size: 12px; white-space:nowrap; }
+    .btn { background: #1b2a4a; color: var(--text); border: 1px solid rgba(36,50,85,.9); padding: 9px 12px; border-radius: 10px; cursor:pointer; white-space:nowrap; }
+    .btn:hover { filter: brightness(1.08); }
+    .status { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--muted); margin-top: 10px; }
+    .hidden { display:none; }
+
+    /* ✅ KPI now 3 columns (Temp, Hum, AI) */
+    .kpi { display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 12px; }
+    @media (max-width: 980px){ .kpi { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 700px){ .kpi { grid-template-columns: 1fr; } }
+
+    .kpi .box { background: rgba(11,18,32,.65); border:1px solid rgba(36,50,85,.6); border-radius: 14px; padding: 12px; position: relative; overflow:hidden; }
+    .kpi .label { color: var(--muted); font-size: 12px; }
+    .kpi .val { font-size: 22px; font-weight: 900; margin-top: 6px; }
+
+    /* ✅ AI forecast styling */
+    .aiBox{
+      border: 1px solid rgba(245,158,11,.35) !important;
+      background: radial-gradient(1200px 300px at 0% 0%, rgba(245,158,11,.12), rgba(11,18,32,.65));
+    }
+    .aiTag{
+      position:absolute; top:10px; right:10px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      border: 1px solid rgba(245,158,11,.45);
+      background: rgba(245,158,11,.10);
+      color: #ffd38a;
+      letter-spacing: .3px;
+    }
+    .aiGrid{
+      display:grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .aiMini{
+      border: 1px solid rgba(245,158,11,.18);
+      background: rgba(0,0,0,.12);
+      border-radius: 12px;
+      padding: 10px 10px;
+    }
+    .aiMini .t { color: #ffd38a; font-size: 11px; }
+    .aiMini .v { font-size: 18px; font-weight: 900; margin-top: 4px; }
+    .aiSub { color: var(--muted); font-size: 12px; margin-top: 8px; }
+
+    .badge { padding: 6px 10px; border-radius: 10px; border:1px solid rgba(36,50,85,.8); font-size: 12px; }
+    .b-ok { background: rgba(16,185,129,.12); }
+    .b-warn { background: rgba(59,130,246,.12); }
+    .b-danger { background: rgba(239,68,68,.12); }
+
+    select { background:#0b1220; color: var(--text); border:1px solid rgba(36,50,85,.9); padding: 9px 10px; border-radius: 10px; }
+
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { padding: 10px; border-bottom: 1px solid rgba(36,50,85,.6); font-size: 12px; }
+    th { text-align:left; color: var(--muted); font-weight: 800; background: rgba(11,18,32,.55); position: sticky; top:0; }
+    .tableWrap { max-height: 320px; overflow:auto; border:1px solid rgba(36,50,85,.6); border-radius: 12px; margin-top:10px; }
+
+    .historyHeader{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    .historyControls{ display:flex; align-items:center; gap:8px; flex-wrap:nowrap; }
+    @media (max-width: 520px){ .historyControls{ flex-wrap:wrap; } }
+
+    .rtCanvasWrap { margin-top:12px; }
+    #rtChart { width:100%; }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div class="title">Weather Monitoring Dashboard</div>
+
+      <div class="row">
+        <span class="pill" id="wsState">WS: connecting...</span>
+
+        <label class="pill">
+          Node:
+          <select id="nodeSelect">
+            <option value="node_01">node_01</option>
+            <option value="node_02">node_02</option>
+            <option value="node_03">node_03</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div class="grid">
+
+      <!-- REALTIME -->
+      <div class="card">
+        <div class="row">
+          <div style="font-weight:900; font-size:18px;">Realtime Graph</div>
+          <span class="pill">Auto shift window</span>
+        </div>
+
+        <!-- ✅ KPI: Temp + Hum + AI -->
+        <div class="kpi">
+          <div class="box">
+            <div class="label">Temperature (°C)</div>
+            <div class="val" id="tempVal">--</div>
+          </div>
+
+          <div class="box">
+            <div class="label">Humidity (%)</div>
+            <div class="val" id="humVal">--</div>
+          </div>
+
+          <div class="box aiBox">
+            <div class="aiTag">AI Forecast</div>
+            <div class="label">Predicted Temp (°C)</div>
+
+            <div class="aiGrid">
+              <div class="aiMini">
+                <div class="t">+10 min</div>
+                <div class="v" id="ai10">--</div>
+              </div>
+              <div class="aiMini">
+                <div class="t">+30 min</div>
+                <div class="v" id="ai30">--</div>
+              </div>
+              <div class="aiMini">
+                <div class="t">+60 min</div>
+                <div class="v" id="ai60">--</div>
+              </div>
+            </div>
+
+            <div class="aiSub" id="aiStatus">Waiting AI...</div>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:12px;">
+          <span class="badge b-ok" id="rainBadge">Rain: --</span>
+          <span class="badge b-ok" id="gasBadge">Gas: --</span>
+        </div>
+
+        <div class="rtCanvasWrap">
+          <canvas id="rtChart" height="190"></canvas>
+        </div>
+
+        <div class="status" id="rtStatus">Waiting for realtime data...</div>
+      </div>
+
+      <!-- HISTORY -->
+      <div class="card">
+        <div class="historyHeader">
+          <div style="font-weight:900; font-size:18px;">History</div>
+
+          <div class="historyControls">
+            <span class="pill">Last 24 hours</span>
+            <button class="btn" id="toggleHistoryBtn">Show History</button>
+            <button class="btn" id="refreshHistoryBtn">Refresh History</button>
+          </div>
+        </div>
+
+        <div id="historyPanel" class="hidden" style="margin-top:12px;">
+          <canvas id="histChart" height="160"></canvas>
+
+          <div class="tableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Temp</th>
+                  <th>Hum</th>
+                  <th>Rain</th>
+                  <th>Gas</th>
+                </tr>
+              </thead>
+              <tbody id="histTable"></tbody>
+            </table>
+          </div>
+
+          <div class="status" id="histStatus"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // ✅ Works for file:// and also for nginx on 8080
+    const HOST = location.hostname || "157.10.72.112";
+    let NODE_ID = "node_01";
+
+    const wsState = document.getElementById("wsState");
+    const rtStatus = document.getElementById("rtStatus");
+    const nodeSelect = document.getElementById("nodeSelect");
+
+    const tempVal = document.getElementById("tempVal");
+    const humVal = document.getElementById("humVal");
+    const rainBadge = document.getElementById("rainBadge");
+    const gasBadge = document.getElementById("gasBadge");
+
+    // ✅ AI elements
+    const ai10 = document.getElementById("ai10");
+    const ai30 = document.getElementById("ai30");
+    const ai60 = document.getElementById("ai60");
+    const aiStatus = document.getElementById("aiStatus");
+
+    const historyPanel = document.getElementById("historyPanel");
+    const histStatus = document.getElementById("histStatus");
+    const histTable = document.getElementById("histTable");
+    const toggleBtn = document.getElementById("toggleHistoryBtn");
+    const refreshBtn = document.getElementById("refreshHistoryBtn");
+
+    function fmtTime(iso) {
+      const d = new Date(iso);
+      return d.toLocaleString();
+    }
+
+    function badgeClass(level) {
+      const s = String(level || "").toLowerCase();
+      if (s.includes("heavy") || s.includes("danger")) return "b-danger";
+      if (s.includes("light") || s.includes("warning") || s.includes("rain")) return "b-warn";
+      return "b-ok";
+    }
+
+    function setBadge(el, label, value) {
+      el.textContent = `${label}: ${value ?? "--"}`;
+      el.classList.remove("b-ok","b-warn","b-danger");
+      el.classList.add(badgeClass(value));
+    }
+
+    // ===== AI Forecast (Text) =====
+    function setAi(p10, p30, p60, note) {
+      const f = (x) => (Number.isFinite(x) ? x.toFixed(2) : "--");
+      ai10.textContent = f(p10);
+      ai30.textContent = f(p30);
+      ai60.textContent = f(p60);
+      aiStatus.textContent = note || "AI updated.";
+    }
+
+    const FORECAST_HORIZONS = [10, 30, 60];
+    let lastAiFetchMs = 0;
+
+    async function fetchAi(nodeId, force=false) {
+      const now = Date.now();
+      if (!force && (now - lastAiFetchMs) < 15000) return; // throttle 15s
+      lastAiFetchMs = now;
+
+      try {
+        aiStatus.textContent = "AI thinking...";
+        const url = `http://${HOST}:3002/api/predict?node_id=${encodeURIComponent(nodeId)}&horizons=${FORECAST_HORIZONS.join(",")}`;
+        const r = await fetch(url);
+        const data = await r.json();
+
+        if (!data.ok || !data.predictions_c) {
+          setAi(NaN, NaN, NaN, "AI not ready.");
+          return;
+        }
+
+        setAi(
+          Number(data.predictions_c["10"]),
+          Number(data.predictions_c["30"]),
+          Number(data.predictions_c["60"]),
+          `AI updated: ${new Date().toLocaleTimeString()}`
+        );
+      } catch (e) {
+        setAi(NaN, NaN, NaN, "AI fetch failed.");
+      }
+    }
+
+    // ===== Realtime chart (ONLY Temp + Hum) =====
+    const MAX_POINTS = 10;
+    let rtLabels = [], rtTemps = [], rtHums = [];
+
+    const rtChart = new Chart(document.getElementById("rtChart"), {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [
+          { label: "Temperature (°C)", data: [], tension: 0.25 },
+          { label: "Humidity (%)", data: [], tension: 0.25 }
+        ]
+      },
+      options: { responsive: true, animation: false }
+    });
+
+    function pushRealtimePoint(tISO, temp, hum) {
+      const label = new Date(tISO).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      rtLabels.push(label);
+      rtTemps.push(temp);
+      rtHums.push(hum);
+
+      while (rtLabels.length > MAX_POINTS) {
+        rtLabels.shift(); rtTemps.shift(); rtHums.shift();
+      }
+
+      rtChart.data.labels = rtLabels;
+      rtChart.data.datasets[0].data = rtTemps;
+      rtChart.data.datasets[1].data = rtHums;
+      rtChart.update("none");
+    }
+
+    function resetRealtime() {
+      rtLabels = []; rtTemps = []; rtHums = [];
+      rtChart.data.labels = [];
+      rtChart.data.datasets[0].data = [];
+      rtChart.data.datasets[1].data = [];
+      rtChart.update("none");
+
+      tempVal.textContent = "--";
+      humVal.textContent = "--";
+      setBadge(rainBadge, "Rain", "--");
+      setBadge(gasBadge, "Gas", "--");
+      rtStatus.textContent = "Waiting for realtime data...";
+
+      setAi(NaN, NaN, NaN, "Waiting AI...");
+    }
+
+    // ===== WebSocket (Realtime) =====
+    const WS_PROTO = (location.protocol === "https:") ? "wss" : "ws";
+    const ws = new WebSocket(`${WS_PROTO}://${HOST}:3001`);
+
+    ws.onopen = () => { wsState.textContent = "WS: connected"; };
+    ws.onclose = () => { wsState.textContent = "WS: disconnected"; };
+    ws.onerror = () => { wsState.textContent = "WS: error"; };
+
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.node_id !== NODE_ID) return;
+
+        tempVal.textContent = Number(msg.temperature ?? 0).toFixed(1);
+        humVal.textContent  = Number(msg.humidity ?? 0).toFixed(1);
+
+        setBadge(rainBadge, "Rain", msg.rain_level);
+        setBadge(gasBadge, "Gas", msg.gas_level);
+
+        const tISO = msg.created_at || new Date().toISOString();
+        pushRealtimePoint(tISO, Number(msg.temperature), Number(msg.humidity));
+        rtStatus.textContent = `Last update: ${fmtTime(tISO)}`;
+
+        // ✅ update AI when realtime arrives (throttled)
+        fetchAi(NODE_ID, false);
+      } catch (err) {
+        rtStatus.textContent = "Realtime parse error: " + err.message;
+      }
+    };
+
+    // backup AI refresh every 60s
+    fetchAi(NODE_ID, true);
+    setInterval(() => fetchAi(NODE_ID, true), 60000);
+
+    // ===== History =====
+    let histChart = null;
+
+    async function loadHistory() {
+      histStatus.textContent = "Loading history...";
+      const url = `http://${HOST}:3000/api/history?node_id=${encodeURIComponent(NODE_ID)}&limit=1000`;
+      const r = await fetch(url);
+      const rows = await r.json();
+
+      histTable.innerHTML = "";
+      rows.slice(0, 50).forEach(row => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${fmtTime(row.created_at)}</td>
+          <td>${Number(row.temperature).toFixed(1)}</td>
+          <td>${Number(row.humidity).toFixed(1)}</td>
+          <td>${row.rain_level ?? "-"}</td>
+          <td>${row.gas_level ?? "-"}</td>
+        `;
+        histTable.appendChild(tr);
+      });
+
+      const data = rows.slice().reverse();
+      const labels = data.map(r => new Date(r.created_at).toLocaleTimeString());
+      const temps  = data.map(r => Number(r.temperature));
+      const hums   = data.map(r => Number(r.humidity));
+
+      if (histChart) histChart.destroy();
+      histChart = new Chart(document.getElementById("histChart"), {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            { label: "Temperature (°C)", data: temps, tension: 0.25 },
+            { label: "Humidity (%)", data: hums, tension: 0.25 }
+          ]
+        },
+        options: { responsive: true, animation: false }
+      });
+
+      histStatus.textContent = `Loaded ${rows.length} rows for ${NODE_ID} (last 24h).`;
+    }
+
+    toggleBtn.onclick = async () => {
+      const isHidden = historyPanel.classList.contains("hidden");
+      if (isHidden) {
+        historyPanel.classList.remove("hidden");
+        toggleBtn.textContent = "Hide History";
+        await loadHistory();
+      } else {
+        historyPanel.classList.add("hidden");
+        toggleBtn.textContent = "Show History";
+      }
+    };
+
+    refreshBtn.onclick = async () => {
+      if (historyPanel.classList.contains("hidden")) {
+        historyPanel.classList.remove("hidden");
+        toggleBtn.textContent = "Hide History";
+      }
+      await loadHistory();
+    };
+
+    nodeSelect.onchange = async () => {
+      NODE_ID = nodeSelect.value;
+      resetRealtime();
+
+      // force AI refresh for selected node
+      fetchAi(NODE_ID, true);
+
+      if (!historyPanel.classList.contains("hidden")) {
+        await loadHistory();
+      }
+    };
+
+    // init
+    resetRealtime();
+  </script>
+</body>
+</html>
